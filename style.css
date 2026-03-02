@@ -211,6 +211,7 @@ textarea{
   font-size:13px;
   line-height:1.45;
 }
+
 .progressWrap{
   width:100%;
   height:10px;
@@ -231,3 +232,47 @@ button.big{
   border-radius:14px;
   font-size:16px;
 }
+
+/* Bottom sheet */
+.sheetOverlay{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.55);
+  z-index:50;
+}
+.sheet{
+  position:fixed;
+  left:0;
+  right:0;
+  bottom:0;
+  z-index:60;
+  background:var(--card);
+  border-top:1px solid var(--line);
+  border-left:1px solid var(--line);
+  border-right:1px solid var(--line);
+  border-top-left-radius:18px;
+  border-top-right-radius:18px;
+  padding:14px;
+  max-width:720px;
+  margin:0 auto;
+}
+.sheetHeader{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.sheetTitle{ font-weight:900; }
+.sheetBody{ margin-top:10px; }
+.field .label{
+  font-size:12px;
+  color:var(--dim);
+  margin-top:10px;
+}
+.sheetActions{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-top:10px;
+}
+.sheetActions .spacer{ flex:1; }
