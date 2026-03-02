@@ -136,8 +136,20 @@
       </div>
 
       <div class="card">
-        <div class="h">내 학습 원칙</div>
+        <div class="row">
+          <div class="h">내 학습 원칙</div>
+          <button class="ghost" id="btnEditPlan">편집</button>
+        </div>
+
         <pre class="plan" id="planText"></pre>
+
+        <div id="planEditor" class="hidden">
+          <textarea id="planInput" placeholder="내 학습 원칙을 적으세요"></textarea>
+          <div class="row">
+            <button class="ghost" id="btnCancelPlan">취소</button>
+            <button class="primary" id="btnSavePlan">저장</button>
+          </div>
+        </div>
       </div>
     </section>
 
