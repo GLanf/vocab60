@@ -1,4 +1,4 @@
-const CACHE_NAME = "vocab60_cache_v1";
+const CACHE_NAME = "vocab60_cache_v3";
 const ASSETS = [
   "./",
   "./index.html",
@@ -24,12 +24,17 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
+  const req = event.request;
+
+  // navigation은 캐시 우선 + 실패 시 캐시 index로 (오프라인)
+  if (req.mode === "navigate") {
+    event.respondWith(
+      caches.match("./index.html").then((cached) => cached || fetch(req))
+    );
+    return;
+  }
+
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      return cached || fetch(event.request).then((res) => {
-        // 캐시 갱신은 단순화(MVP)
-        return res;
-      }).catch(() => cached);
-    })
+    caches.match(req).then((cached) => cached || fetch(req))
   );
 });
