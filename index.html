@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vocab 60</title>
+  <link rel="manifest" href="./manifest.json" />
+  <meta name="theme-color" content="#111111" />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <div class="title">Vocab 60</div>
+      <div class="subtitle" id="dayLabel">Day -</div>
+    </div>
+    <button class="ghost" id="btnInstall" hidden>홈 화면 추가</button>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="today">Today</button>
+    <button class="tab" data-tab="study">Study</button>
+    <button class="tab" data-tab="add">Add</button>
+    <button class="tab" data-tab="search">Search</button>
+    <button class="tab" data-tab="backup">Backup</button>
+  </nav>
+
+  <main class="main">
+    <!-- Today -->
+    <section class="panel" id="panel-today">
+      <div class="card">
+        <div class="row">
+          <div>
+            <div class="h">오늘 할 것</div>
+            <div class="p" id="todaySummary">-</div>
+          </div>
+          <div class="right">
+            <button class="primary" id="btnStartToday">학습 시작</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <div>
+            <div class="h">설정</div>
+            <div class="p dim">60일 플랜: 신규 20 / 복습 D+5, D+20</div>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="box">
+            <div class="k">플랜 시작일</div>
+            <div class="v" id="startDateLabel">-</div>
+          </div>
+          <div class="box">
+            <div class="k">오늘 날짜</div>
+            <div class="v" id="todayDateLabel">-</div>
+          </div>
+        </div>
+
+        <div class="row">
+          <button class="ghost" id="btnSetStartToday">시작일을 오늘로 설정</button>
+          <button class="danger" id="btnResetAll">전체 데이터 초기화</button>
+        </div>
+        <div class="p dim small">
+          ※ localStorage 기반이라 기기/브라우저 변경 시 데이터가 사라질 수 있습니다. Backup 탭에서 JSON 백업을 권장합니다.
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="h">오늘 목록(미리보기)</div>
+        <div class="p dim small">Study 탭에서 “학습 큐”를 돌립니다.</div>
+        <div id="todayPreview" class="list"></div>
+      </div>
+    </section>
+
+    <!-- Study -->
+    <section class="panel hidden" id="panel-study">
+      <div class="card">
+        <div class="row">
+          <div>
+            <div class="h">학습</div>
+            <div class="p" id="studyMeta">-</div>
+          </div>
+          <div class="right">
+            <button class="ghost" id="btnShuffle">섞기</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="studyCard" id="studyCard">
+        <div class="badge" id="studyBadge">-</div>
+        <div class="word" id="studyWord">-</div>
+        <div class="meaning hidden" id="studyMeaning">-</div>
+        <div class="example hidden" id="studyExample">-</div>
+        <div class="tapHint">탭해서 뜻/예문 보기</div>
+      </div>
+
+      <div class="row">
+        <button class="ghost" id="btnReveal">뜻 보기</button>
+        <button class="primary" id="btnNext">다음</button>
+      </div>
+
+      <div class="card">
+        <div class="h">학습 원칙(앱에 저장된 플랜)</div>
+        <pre class="plan" id="planText"></pre>
+      </div>
+    </section>
+
+    <!-- Add -->
+    <section class="panel hidden" id="panel-add">
+      <div class="card">
+        <div class="h">단어 추가</div>
+        <div class="p dim small">
+          형식 예시 (한 줄에 하나):
+          <br/>dedicate | 헌신하다 | He dedicated his life to science.
+          <br/>example은 생략 가능
+        </div>
+
+        <textarea id="addInput" placeholder="word | meaning | example (optional)&#10;word | meaning&#10;..."></textarea>
+
+        <div class="grid2">
+          <div class="box">
+            <div class="k">오늘 신규 목표</div>
+            <div class="v"><span id="dailyNewLimit">20</span>개</div>
+          </div>
+          <div class="box">
+            <div class="k">오늘 이미 추가</div>
+            <div class="v"><span id="todayAddedCount">0</span>개</div>
+          </div>
+        </div>
+
+        <div class="row">
+          <button class="ghost" id="btnParsePreview">미리보기</button>
+          <button class="primary" id="btnAddBatch">오늘치 추가(최대 20개)</button>
+        </div>
+
+        <div class="p dim small" id="addResult">-</div>
+        <div id="addPreview" class="list"></div>
+      </div>
+    </section>
+
+    <!-- Search -->
+    <section class="panel hidden" id="panel-search">
+      <div class="card">
+        <div class="h">검색</div>
+        <input id="searchInput" class="input" placeholder="word/meaning/example 검색" />
+        <div class="p dim small" id="searchMeta">-</div>
+        <div id="searchList" class="list"></div>
+      </div>
+    </section>
+
+    <!-- Backup -->
+    <section class="panel hidden" id="panel-backup">
+      <div class="card">
+        <div class="h">JSON 백업 / 복원</div>
+        <div class="row">
+          <button class="ghost" id="btnExport">Export JSON</button>
+          <label class="file">
+            Import JSON
+            <input type="file" id="importFile" accept="application/json" />
+          </label>
+        </div>
+        <div class="p dim small" id="backupMeta">-</div>
+        <textarea id="backupText" placeholder="Export 시 여기에 JSON이 표시됩니다."></textarea>
+        <div class="row">
+          <button class="ghost" id="btnCopyBackup">JSON 복사</button>
+          <button class="ghost" id="btnRestoreFromText">이 텍스트로 복원(덮어쓰기)</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>

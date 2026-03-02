@@ -1,0 +1,15 @@
+{
+  "name": "Vocab 60",
+  "short_name": "Vocab60",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f0f10",
+  "theme_color": "#111111",
+  "icons": [
+    {
+      "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAI0lEQVR4nO3BMQEAAADCoPVPbQ0PoAAAAAAAAAAA4G0G0gAAAVpJREFUeJztmE1OwzAQhS0o0mQwQHkB0yQyQqgYwQv0BqYwqJ8JrBf2y5y2nqV3m2x7nJd5n9mQKk3q2r3g4A0m8pQp3bqg9c5xqkq1sJm1E3gVvYwYx7o6b3Qm9wC8m8r8C1y7oYQm7wZc6c0y3r0e4mCk4F0w7e0bK2m3kP8v2Q7m5b0qQf3o2h0n7c3i2x3Bf1n0q8mYyQZqkVqVv6l9b2k8y1mZf2j9c2oYw2m8YtQ0s2c2oYw2m8YtQ0s2c2oYw2m8YtQ0s2c2oYw2m8YtQ0s2c2oYw2m8YtQ0s2c2oYw2m8YtQ0s2c2oYw2m8YtQ0s2c2oYw2m8YtQ0s2c2oYw2m8YtQ0s2c2oYw2m8YtQ0s2c2oYw2m8YtQ0s2c2oYw2m8YtQ0s2c2oYw2m8YtQ0s2c2oYw2m8YtQ0s2c2oYw2m8YtQ0s2c2oYw2m8YtQ0s2c2oYw2m8YtQ0s2c2oYw2m8YtQ0s2c2oYw2m8YtQ0s2c2oYw2m8YtQ0s2c2oYw2m8YtQ0s2c2oYw2m8YtQ0s2c2oYw0AAAAASUVORK5CYII=",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
