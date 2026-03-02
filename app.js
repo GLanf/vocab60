@@ -14,6 +14,9 @@ const DEFAULT_PLAN_TEXT =
 
 const DAILY_NEW_LIMIT = 20;
 const REVIEW_OFFSETS = [5, 20];
+const RECENT_SEARCH_DEFAULT_LIMIT = 30;
+
+const $ = (id) => document.getElementById(id);
 
 function todayISO() {
   const d = new Date();
@@ -34,8 +37,6 @@ function daysBetween(startISO, endISO) {
 function uid() {
   return `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
-const $ = (id) => document.getElementById(id);
-
 function escapeHtml(s) {
   return String(s)
     .replaceAll("&", "&amp;")
@@ -44,11 +45,26 @@ function escapeHtml(s) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
+function normSpaces(s) {
+  return String(s ?? "").replace(/\s+/g, " ").trim();
+}
+function normWordKey(s) {
+  // 중복 비교 키: 소문자 + 공백 정리
+  return normSpaces(s).toLowerCase();
+}
 
+// --- State
 function loadState() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) {
-    const s = { version: 1, startDate: null, cards: [], planText: DEFAULT_PLAN_TEXT, dayNewCount: {} };
+    const s = {
+      version: 1,
+      startDate: null,
+      cards: [],
+      planText: DEFAULT_PLAN_TEXT,
+      dayNewCount: {},
+      lastBackupAt: null
+    };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
     return s;
   }
@@ -57,10 +73,11 @@ function loadState() {
     s.planText ??= DEFAULT_PLAN_TEXT;
     s.dayNewCount ??= {};
     s.cards ??= [];
+    s.lastBackupAt ??= null;
     return s;
   } catch {
     localStorage.setItem(STORAGE_KEY + "_corrupt_backup", raw);
-    const s = { version: 1, startDate: null, cards: [], planText: DEFAULT_PLAN_TEXT, dayNewCount: {} };
+    const s = { version: 1, startDate: null, cards: [], planText: DEFAULT_PLAN_TEXT, dayNewCount: {}, lastBackupAt: null };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
     return s;
   }
@@ -80,7 +97,6 @@ function todayNewAdded(state, dayNo) {
 function incTodayNewAdded(state, dayNo, by) {
   state.dayNewCount[String(dayNo)] = todayNewAdded(state, dayNo) + by;
 }
-
 function cardDueToday(card, dayNo) {
   if (!dayNo) return false;
   if (card.createdDay === dayNo) return true;
@@ -92,9 +108,9 @@ function createCard(item, createdDay) {
   const reviews = REVIEW_OFFSETS.map(off => createdDay + off);
   return {
     id: uid(),
-    word: item.word,
-    meaning: item.meaning,
-    example: item.example ?? "",
+    word: normSpaces(item.word),
+    meaning: normSpaces(item.meaning),
+    example: normSpaces(item.example ?? ""),
     createdDay,
     reviews,
     createdAt: todayISO(),
@@ -102,42 +118,53 @@ function createCard(item, createdDay) {
   };
 }
 
-// --- Parse (라인 삭제를 위해 "어느 줄이 유효했는지"도 같이 반환)
+// --- Parse (라인 삭제용)
 function normalizeLine(line) {
-  return line.replace(/\t/g, " | ").trim();
+  return String(line ?? "").replace(/\t/g, " | ").trim();
 }
 function parseBatchWithLineInfo(text) {
-  const rawLines = text.split("\n");
+  const rawLines = String(text ?? "").split("\n");
   const items = [];
-  const validLineIndexes = []; // 추가에 사용된 "유효 라인 인덱스"
+  const validLineIndexes = [];
   rawLines.forEach((line0, idx) => {
     const line = normalizeLine(line0);
     if (!line) return;
-    const parts = line.split("|").map(p => p.trim()).filter(Boolean);
+    const parts = line.split("|").map(p => p.trim());
     if (parts.length < 2) return;
-    const word = parts[0];
-    const meaning = parts[1];
-    const example = parts.slice(2).join(" | ").trim();
+    const word = normSpaces(parts[0]);
+    const meaning = normSpaces(parts[1]);
+    if (!word || !meaning) return;
+    const example = normSpaces(parts.slice(2).join(" | "));
     items.push({ word, meaning, example });
     validLineIndexes.push(idx);
   });
   return { rawLines, items, validLineIndexes };
 }
 function removeFirstNValidLines(text, validLineIndexes, n) {
-  const lines = text.split("\n");
+  const lines = String(text ?? "").split("\n");
   const toRemove = new Set(validLineIndexes.slice(0, n));
   const kept = lines.filter((_, idx) => !toRemove.has(idx));
-  // 앞뒤 공백 줄 정리(너무 공격적이면 불편하니 최소만)
   return kept.join("\n").replace(/^\n+/, "");
 }
 
+// --- Hash routing (URL에 #study 형태)
+function getHashTab() {
+  const h = (location.hash || "").replace("#", "").trim();
+  return h || "today";
+}
+function setHashTab(tabName) {
+  const next = `#${tabName}`;
+  if (location.hash !== next) location.hash = next;
+}
+
 // --- Tabs
-function setTab(tabName) {
+function setTab(tabName, { syncHash = true } = {}) {
   document.querySelectorAll(".tab").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.tab === tabName);
   });
   document.querySelectorAll(".panel").forEach(p => p.classList.add("hidden"));
   $(`panel-${tabName}`).classList.remove("hidden");
+  if (syncHash) setHashTab(tabName);
 }
 
 // --- Study queue
@@ -168,6 +195,7 @@ function startTodayStudy(state) {
 
 function renderStudy(state) {
   $("planText").textContent = state.planText ?? DEFAULT_PLAN_TEXT;
+
   const dayNo = currentDayNumber(state);
   if (!dayNo) {
     $("studyMeta").textContent = "시작일을 먼저 설정하세요 (Today 탭).";
@@ -224,7 +252,7 @@ function shuffleQueue() {
   renderStudy(loadState());
 }
 
-// --- Today render
+// --- Today render (4-2)
 function renderToday(state) {
   const dayNo = currentDayNumber(state);
   const hasStart = Boolean(state.startDate);
@@ -233,7 +261,6 @@ function renderToday(state) {
   $("startDateLabel").textContent = hasStart ? state.startDate : "미설정";
   $("todayDateLabel").textContent = todayISO();
 
-  // 온보딩 카드 표시/숨김
   $("onboardingCard").style.display = hasStart ? "none" : "block";
 
   if (!hasStart) {
@@ -241,6 +268,7 @@ function renderToday(state) {
     $("todayReviewCount").textContent = "-";
     $("todaySummary").textContent = "시작일을 설정한 뒤, Add에서 오늘치(20개)를 추가하세요.";
     $("todayProgress").style.width = "0%";
+    $("todayGuideCard").style.display = "none";
     renderTodayPreview(state, []);
     return;
   }
@@ -248,19 +276,26 @@ function renderToday(state) {
   const due = state.cards.filter(c => cardDueToday(c, dayNo));
   const newCount = todayNewAdded(state, dayNo);
   const reviewCount = due.filter(c => c.createdDay !== dayNo).length;
+  const remainingNew = Math.max(0, DAILY_NEW_LIMIT - newCount);
 
   $("todayNewCount").textContent = String(newCount);
   $("todayReviewCount").textContent = String(reviewCount);
 
-  const remaining = Math.max(0, DAILY_NEW_LIMIT - newCount);
-  const totalTarget = DAILY_NEW_LIMIT + reviewCount; // 오늘 해야할 목표치(개념상)
-  const doneLike = Math.min(newCount, DAILY_NEW_LIMIT); // 신규는 추가가 완료 기준
-  // 진행률은 "신규 추가 완료 비율"을 중심으로 단순화(복습까지 합치면 오히려 스트레스)
-  const pct = Math.round((doneLike / DAILY_NEW_LIMIT) * 100);
+  // 진행률은 신규 기준으로만(스트레스 방지)
+  const pct = Math.round((Math.min(newCount, DAILY_NEW_LIMIT) / DAILY_NEW_LIMIT) * 100);
   $("todayProgress").style.width = `${pct}%`;
 
   $("todaySummary").textContent =
-    `오늘 남은 신규: ${remaining}개 · 오늘 큐(신규+복습): ${due.length}개`;
+    `오늘 남은 신규: ${remainingNew}개 · 오늘 큐(신규+복습): ${due.length}개`;
+
+  // 가이드 배너
+  if (remainingNew > 0) {
+    $("todayGuideCard").style.display = "block";
+    $("todayGuideText").textContent =
+      `신규 ${remainingNew}개 남았습니다. Add에서 ‘오늘치 추가’를 눌러 채우고, Study로 넘어가면 가장 깔끔합니다.`;
+  } else {
+    $("todayGuideCard").style.display = "none";
+  }
 
   renderTodayPreview(state, due);
 }
@@ -299,7 +334,7 @@ function renderTodayPreview(state, due) {
   }
 }
 
-// --- Add render + action
+// --- Add render + action (4-4)
 function renderAdd(state) {
   const dayNo = currentDayNumber(state);
   const hasStart = Boolean(state.startDate);
@@ -333,81 +368,170 @@ function addTodayBatchAndTrim(state) {
 
   const toAdd = items.slice(0, remain);
 
-  const existing = new Set(state.cards.map(c => c.word.trim().toLowerCase()));
-  const addedCards = [];
+  const existing = new Set(state.cards.map(c => normWordKey(c.word)));
+  let added = 0;
   let skipped = 0;
 
   for (const item of toAdd) {
-    const key = item.word.trim().toLowerCase();
+    const key = normWordKey(item.word);
+    if (!key || !item.meaning) { skipped++; continue; }
     if (existing.has(key)) { skipped++; continue; }
-    const card = createCard(item, dayNo);
-    state.cards.push(card);
+    state.cards.push(createCard(item, dayNo));
     existing.add(key);
-    addedCards.push(card);
+    added++;
   }
 
-  // “실제로 추가된 개수”만큼 유효 라인을 제거
-  const consumed = Math.min(validLineIndexes.length, addedCards.length + skipped);
-  // 여기서 정책 선택:
-  // - 중복도 사용자가 이미 처리한 줄로 보고 같이 제거하면, 다음날 반복 작업이 편함(추천)
+  // "유효 라인" 중에서 처리한 만큼(추가+스킵) 제거 -> 다음날 작업 편함
+  const consumed = Math.min(validLineIndexes.length, added + skipped);
   $("addInput").value = removeFirstNValidLines(input, validLineIndexes, consumed);
 
-  incTodayNewAdded(state, dayNo, addedCards.length);
+  incTodayNewAdded(state, dayNo, added);
   saveState(state);
 
   return {
     ok:true,
-    msg:`추가 완료: ${addedCards.length}개 (중복 스킵: ${skipped}개) · 오늘 누적 신규: ${todayNewAdded(state, dayNo)}개`
+    msg:`추가 완료: ${added}개 (스킵: ${skipped}개) · 오늘 누적 신규: ${todayNewAdded(state, dayNo)}개`
   };
 }
 
-// --- Search
+// --- Search (4-1) + Edit Sheet (A)
+let selectedCardId = null;
+
+function getRecentCards(state) {
+  // updatedAt desc, fallback createdAt
+  return [...state.cards].sort((a, b) => {
+    const au = a.updatedAt || a.createdAt || "";
+    const bu = b.updatedAt || b.createdAt || "";
+    if (au !== bu) return bu.localeCompare(au);
+    return (b.createdAt || "").localeCompare(a.createdAt || "");
+  });
+}
+
 function renderSearch(state, q) {
   const list = $("searchList");
   const meta = $("searchMeta");
   list.innerHTML = "";
 
-  const query = (q ?? "").trim().toLowerCase();
+  const query = normSpaces(q).toLowerCase();
+  let hits = [];
+
   if (!query) {
-    meta.textContent = `전체 ${state.cards.length}개`;
+    hits = getRecentCards(state).slice(0, RECENT_SEARCH_DEFAULT_LIMIT);
+    meta.textContent = `최근 ${hits.length}개 표시 / 전체 ${state.cards.length}개`;
+  } else {
+    hits = state.cards.filter(c => {
+      const w = normSpaces(c.word).toLowerCase();
+      const m = normSpaces(c.meaning).toLowerCase();
+      const e = normSpaces(c.example).toLowerCase();
+      return w.includes(query) || m.includes(query) || e.includes(query);
+    });
+    meta.textContent = `검색 결과 ${hits.length}개 / 전체 ${state.cards.length}개`;
+  }
+
+  if (hits.length === 0) {
+    list.innerHTML = `<div class="item"><div class="m">검색 결과가 없습니다.</div></div>`;
     return;
   }
-  const hits = state.cards.filter(c => {
-    const w = (c.word || "").toLowerCase();
-    const m = (c.meaning || "").toLowerCase();
-    const e = (c.example || "").toLowerCase();
-    return w.includes(query) || m.includes(query) || e.includes(query);
-  });
 
-  meta.textContent = `검색 결과 ${hits.length}개 / 전체 ${state.cards.length}개`;
-
-  for (const c of hits.slice(0, 80)) {
+  for (const c of hits.slice(0, 120)) {
     const div = document.createElement("div");
     div.className = "item";
     div.innerHTML = `
       <div class="w">${escapeHtml(c.word)}</div>
       <div class="m">${escapeHtml(c.meaning)}</div>
       ${c.example ? `<div class="e">${escapeHtml(c.example)}</div>` : ""}
-      <div class="meta">createdDay=${c.createdDay} · reviews=${(c.reviews||[]).join(",")}</div>
+      <div class="meta">tap to edit · createdDay=${c.createdDay}</div>
     `;
+    div.addEventListener("click", () => openEditSheet(c.id));
     list.appendChild(div);
   }
-  if (hits.length > 80) {
+
+  if (hits.length > 120) {
     const div = document.createElement("div");
     div.className = "item";
-    div.innerHTML = `<div class="m dim">… +${hits.length - 80}개</div>`;
+    div.innerHTML = `<div class="m dim">… +${hits.length - 120}개</div>`;
     list.appendChild(div);
   }
 }
 
-// --- Backup
+function openEditSheet(cardId) {
+  const state = loadState();
+  const c = state.cards.find(x => x.id === cardId);
+  if (!c) return;
+
+  selectedCardId = cardId;
+  $("editWord").value = c.word || "";
+  $("editMeaning").value = c.meaning || "";
+  $("editExample").value = c.example || "";
+  $("editMeta").textContent = `createdDay=${c.createdDay} · reviews=${(c.reviews||[]).join(",")} · updatedAt=${c.updatedAt || "-"}`;
+
+  $("sheetOverlay").classList.remove("hidden");
+  $("editSheet").classList.remove("hidden");
+}
+
+function closeEditSheet() {
+  selectedCardId = null;
+  $("sheetOverlay").classList.add("hidden");
+  $("editSheet").classList.add("hidden");
+}
+
+function saveEdit() {
+  const state = loadState();
+  const idx = state.cards.findIndex(x => x.id === selectedCardId);
+  if (idx < 0) return alert("카드를 찾지 못했습니다.");
+
+  const nextWord = normSpaces($("editWord").value);
+  const nextMeaning = normSpaces($("editMeaning").value);
+  const nextExample = normSpaces($("editExample").value);
+
+  if (!nextWord || !nextMeaning) return alert("word와 meaning은 필수입니다.");
+
+  // 중복 체크(다른 카드와 word가 동일하면 저장 금지)
+  const nextKey = normWordKey(nextWord);
+  const dup = state.cards.some((c, i) => i !== idx && normWordKey(c.word) === nextKey);
+  if (dup) return alert("이미 같은 word가 있습니다. (중복)");
+
+  state.cards[idx].word = nextWord;
+  state.cards[idx].meaning = nextMeaning;
+  state.cards[idx].example = nextExample;
+  state.cards[idx].updatedAt = todayISO();
+
+  saveState(state);
+  closeEditSheet();
+  rerenderAll();
+  alert("저장 완료");
+}
+
+function deleteSelected() {
+  const ok = confirm("정말 삭제할까요? (되돌릴 수 없음)");
+  if (!ok) return;
+
+  const state = loadState();
+  const before = state.cards.length;
+  state.cards = state.cards.filter(c => c.id !== selectedCardId);
+  const after = state.cards.length;
+
+  if (after === before) return alert("삭제할 카드를 찾지 못했습니다.");
+
+  saveState(state);
+  closeEditSheet();
+  rerenderAll();
+  alert("삭제 완료");
+}
+
+// --- Backup (4-5)
 function renderBackup(state) {
-  $("backupMeta").textContent = `카드 ${state.cards.length}개 · 시작일 ${state.startDate ?? "미설정"}`;
+  const last = state.lastBackupAt ? ` · 마지막 백업: ${state.lastBackupAt}` : "";
+  $("backupMeta").textContent = `카드 ${state.cards.length}개 · 시작일 ${state.startDate ?? "미설정"}${last}`;
   $("backupText").value = "";
 }
 function exportJson(state) {
+  state.lastBackupAt = `${todayISO()}`;
+  saveState(state);
+
   const json = JSON.stringify(state, null, 2);
   $("backupText").value = json;
+
   const blob = new Blob([json], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -460,11 +584,20 @@ function rerenderAll() {
   renderBackup(state);
 }
 
+// Tabs
 document.querySelectorAll(".tab").forEach(btn => {
   btn.addEventListener("click", () => setTab(btn.dataset.tab));
 });
 
-// Today buttons
+// Hash change -> tab sync
+window.addEventListener("hashchange", () => {
+  const t = getHashTab();
+  if (["today","study","add","search","backup"].includes(t)) {
+    setTab(t, { syncHash: false });
+  }
+});
+
+// Today
 $("btnSetStartToday").addEventListener("click", () => {
   state = loadState();
   state.startDate = todayISO();
@@ -472,7 +605,6 @@ $("btnSetStartToday").addEventListener("click", () => {
   rerenderAll();
   alert(`시작일을 ${state.startDate}로 설정했습니다.`);
 });
-
 $("btnResetAll").addEventListener("click", () => {
   const ok = confirm("전체 데이터를 초기화할까요? (되돌릴 수 없음)");
   if (!ok) return;
@@ -480,16 +612,15 @@ $("btnResetAll").addEventListener("click", () => {
   studyQueue = [];
   studyIndex = 0;
   revealed = false;
+  closeEditSheet();
   state = loadState();
   rerenderAll();
 });
-
 $("btnStartToday").addEventListener("click", () => {
   state = loadState();
   if (!state.startDate) return alert("먼저 시작일을 설정하세요.");
   startTodayStudy(state);
 });
-
 $("btnQuickAdd").addEventListener("click", () => setTab("add"));
 $("btnGoAdd").addEventListener("click", () => setTab("add"));
 
@@ -508,8 +639,7 @@ $("btnBackToday").addEventListener("click", () => setTab("today"));
 
 // Add
 $("btnParsePreview").addEventListener("click", () => {
-  const text = $("addInput").value;
-  const { items } = parseBatchWithLineInfo(text);
+  const { items } = parseBatchWithLineInfo($("addInput").value);
   const wrap = $("addPreview");
   wrap.innerHTML = "";
   if (items.length === 0) {
@@ -527,7 +657,6 @@ $("btnParsePreview").addEventListener("click", () => {
     wrap.appendChild(div);
   }
 });
-
 $("btnAddBatch").addEventListener("click", () => {
   state = loadState();
   if (!state.startDate) return alert("먼저 시작일을 설정하세요.");
@@ -542,12 +671,18 @@ $("searchInput").addEventListener("input", (e) => {
   renderSearch(loadState(), e.target.value);
 });
 
+// Edit sheet handlers
+$("sheetOverlay").addEventListener("click", closeEditSheet);
+$("btnSheetClose").addEventListener("click", closeEditSheet);
+$("btnCancelEdit").addEventListener("click", closeEditSheet);
+$("btnSaveEdit").addEventListener("click", saveEdit);
+$("btnDeleteCard").addEventListener("click", deleteSelected);
+
 // Backup
 $("btnExport").addEventListener("click", () => {
   exportJson(loadState());
   renderBackup(loadState());
 });
-
 $("btnCopyBackup").addEventListener("click", async () => {
   const t = $("backupText").value.trim();
   if (!t) return alert("먼저 Export 하거나 JSON이 있어야 합니다.");
@@ -558,7 +693,6 @@ $("btnCopyBackup").addEventListener("click", async () => {
     alert("복사 실패(브라우저 권한). 텍스트를 직접 선택해서 복사하세요.");
   }
 });
-
 $("btnRestoreFromText").addEventListener("click", () => {
   const ok = confirm("이 텍스트로 복원(덮어쓰기)할까요?");
   if (!ok) return;
@@ -569,13 +703,13 @@ $("btnRestoreFromText").addEventListener("click", () => {
     studyQueue = [];
     studyIndex = 0;
     revealed = false;
+    closeEditSheet();
     rerenderAll();
     alert("복원 완료");
   } catch (e) {
     alert(`복원 실패: ${e.message}`);
   }
 });
-
 $("importFile").addEventListener("change", async (e) => {
   const file = e.target.files?.[0];
   if (!file) return;
@@ -587,6 +721,7 @@ $("importFile").addEventListener("change", async (e) => {
     studyQueue = [];
     studyIndex = 0;
     revealed = false;
+    closeEditSheet();
     rerenderAll();
     alert("Import 복원 완료");
   } catch (err) {
@@ -598,4 +733,5 @@ $("importFile").addEventListener("change", async (e) => {
 
 // init
 rerenderAll();
-setTab("today");
+const initialTab = getHashTab();
+setTab(["today","study","add","search","backup"].includes(initialTab) ? initialTab : "today");
