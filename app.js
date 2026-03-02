@@ -49,7 +49,6 @@ function normSpaces(s) {
   return String(s ?? "").replace(/\s+/g, " ").trim();
 }
 function normWordKey(s) {
-  // 중복 비교 키: 소문자 + 공백 정리
   return normSpaces(s).toLowerCase();
 }
 
@@ -131,9 +130,11 @@ function parseBatchWithLineInfo(text) {
     if (!line) return;
     const parts = line.split("|").map(p => p.trim());
     if (parts.length < 2) return;
+
     const word = normSpaces(parts[0]);
     const meaning = normSpaces(parts[1]);
     if (!word || !meaning) return;
+
     const example = normSpaces(parts.slice(2).join(" | "));
     items.push({ word, meaning, example });
     validLineIndexes.push(idx);
@@ -147,7 +148,7 @@ function removeFirstNValidLines(text, validLineIndexes, n) {
   return kept.join("\n").replace(/^\n+/, "");
 }
 
-// --- Hash routing (URL에 #study 형태)
+// --- Hash routing (URL: #study 형태)
 function getHashTab() {
   const h = (location.hash || "").replace("#", "").trim();
   return h || "today";
@@ -203,6 +204,7 @@ function renderStudy(state) {
     $("studyMeaning").textContent = "-";
     $("studyExample").textContent = "-";
     $("studyBadge").textContent = "-";
+    $("btnNext").textContent = "다음";
     return;
   }
 
@@ -212,18 +214,24 @@ function renderStudy(state) {
     $("studyMeaning").textContent = "-";
     $("studyExample").textContent = "-";
     $("studyBadge").textContent = "-";
+    $("btnNext").textContent = "다음";
     return;
   }
 
+  // ✅ 완료 상태: 버튼을 '완료'로
   if (studyIndex >= studyQueue.length) {
     $("studyMeta").textContent = "오늘 학습 완료 🎉";
     $("studyBadge").textContent = "DONE";
     $("studyWord").textContent = "완료!";
-    $("studyMeaning").textContent = "Today로 돌아가서 신규/복습 상태를 확인하세요.";
+    $("studyMeaning").textContent = "완료 버튼을 누르면 Today로 돌아갑니다.";
     $("studyMeaning").classList.remove("hidden");
     $("studyExample").classList.add("hidden");
+    $("btnNext").textContent = "완료";
     return;
   }
+
+  // 진행 중: 버튼은 항상 '다음'
+  $("btnNext").textContent = "다음";
 
   const c = studyQueue[studyIndex];
   const isNew = c.createdDay === dayNo;
@@ -252,7 +260,7 @@ function shuffleQueue() {
   renderStudy(loadState());
 }
 
-// --- Today render (4-2)
+// --- Today render
 function renderToday(state) {
   const dayNo = currentDayNumber(state);
   const hasStart = Boolean(state.startDate);
@@ -281,14 +289,13 @@ function renderToday(state) {
   $("todayNewCount").textContent = String(newCount);
   $("todayReviewCount").textContent = String(reviewCount);
 
-  // 진행률은 신규 기준으로만(스트레스 방지)
+  // 진행률은 신규 기준으로만
   const pct = Math.round((Math.min(newCount, DAILY_NEW_LIMIT) / DAILY_NEW_LIMIT) * 100);
   $("todayProgress").style.width = `${pct}%`;
 
   $("todaySummary").textContent =
     `오늘 남은 신규: ${remainingNew}개 · 오늘 큐(신규+복습): ${due.length}개`;
 
-  // 가이드 배너
   if (remainingNew > 0) {
     $("todayGuideCard").style.display = "block";
     $("todayGuideText").textContent =
@@ -334,7 +341,7 @@ function renderTodayPreview(state, due) {
   }
 }
 
-// --- Add render + action (4-4)
+// --- Add
 function renderAdd(state) {
   const dayNo = currentDayNumber(state);
   const hasStart = Boolean(state.startDate);
@@ -381,7 +388,7 @@ function addTodayBatchAndTrim(state) {
     added++;
   }
 
-  // "유효 라인" 중에서 처리한 만큼(추가+스킵) 제거 -> 다음날 작업 편함
+  // 처리한 라인(추가+스킵) 제거
   const consumed = Math.min(validLineIndexes.length, added + skipped);
   $("addInput").value = removeFirstNValidLines(input, validLineIndexes, consumed);
 
@@ -394,11 +401,10 @@ function addTodayBatchAndTrim(state) {
   };
 }
 
-// --- Search (4-1) + Edit Sheet (A)
+// --- Search + Edit Sheet
 let selectedCardId = null;
 
 function getRecentCards(state) {
-  // updatedAt desc, fallback createdAt
   return [...state.cards].sort((a, b) => {
     const au = a.updatedAt || a.createdAt || "";
     const bu = b.updatedAt || b.createdAt || "";
@@ -486,7 +492,6 @@ function saveEdit() {
 
   if (!nextWord || !nextMeaning) return alert("word와 meaning은 필수입니다.");
 
-  // 중복 체크(다른 카드와 word가 동일하면 저장 금지)
   const nextKey = normWordKey(nextWord);
   const dup = state.cards.some((c, i) => i !== idx && normWordKey(c.word) === nextKey);
   if (dup) return alert("이미 같은 word가 있습니다. (중복)");
@@ -519,7 +524,7 @@ function deleteSelected() {
   alert("삭제 완료");
 }
 
-// --- Backup (4-5)
+// --- Backup
 function renderBackup(state) {
   const last = state.lastBackupAt ? ` · 마지막 백업: ${state.lastBackupAt}` : "";
   $("backupMeta").textContent = `카드 ${state.cards.length}개 · 시작일 ${state.startDate ?? "미설정"}${last}`;
@@ -548,6 +553,16 @@ function importJsonText(text) {
     throw new Error("형식이 올바르지 않습니다 (version/cards 확인).");
   }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
+}
+
+// --- Plan editor
+function openPlanEditor() {
+  const state = loadState();
+  $("planInput").value = state.planText ?? DEFAULT_PLAN_TEXT;
+  $("planEditor").classList.remove("hidden");
+}
+function closePlanEditor() {
+  $("planEditor").classList.add("hidden");
 }
 
 // --- PWA install prompt
@@ -613,6 +628,7 @@ $("btnResetAll").addEventListener("click", () => {
   studyIndex = 0;
   revealed = false;
   closeEditSheet();
+  closePlanEditor();
   state = loadState();
   rerenderAll();
 });
@@ -633,9 +649,32 @@ $("btnReveal").addEventListener("click", () => {
   revealed = true;
   renderStudy(loadState());
 });
-$("btnNext").addEventListener("click", () => nextCard());
+
+// ✅ Next 버튼: 완료 상태면 Today로
+$("btnNext").addEventListener("click", () => {
+  if (studyQueue.length > 0 && studyIndex >= studyQueue.length) {
+    setTab("today");
+    return;
+  }
+  nextCard();
+});
+
 $("btnShuffle").addEventListener("click", () => shuffleQueue());
 $("btnBackToday").addEventListener("click", () => setTab("today"));
+
+// Plan editor buttons
+$("btnEditPlan").addEventListener("click", () => openPlanEditor());
+$("btnCancelPlan").addEventListener("click", () => closePlanEditor());
+$("btnSavePlan").addEventListener("click", () => {
+  const state = loadState();
+  const next = String($("planInput").value ?? "").trim();
+  if (!next) return alert("비어있을 수는 없습니다.");
+  state.planText = next;
+  saveState(state);
+  $("planText").textContent = state.planText;
+  closePlanEditor();
+  alert("저장 완료");
+});
 
 // Add
 $("btnParsePreview").addEventListener("click", () => {
@@ -704,6 +743,7 @@ $("btnRestoreFromText").addEventListener("click", () => {
     studyIndex = 0;
     revealed = false;
     closeEditSheet();
+    closePlanEditor();
     rerenderAll();
     alert("복원 완료");
   } catch (e) {
@@ -722,6 +762,7 @@ $("importFile").addEventListener("change", async (e) => {
     studyIndex = 0;
     revealed = false;
     closeEditSheet();
+    closePlanEditor();
     rerenderAll();
     alert("Import 복원 완료");
   } catch (err) {
@@ -734,6 +775,7 @@ $("importFile").addEventListener("change", async (e) => {
 // init
 rerenderAll();
 
+// ✅ 새로고침/직접 링크 진입 시 해시 탭으로 이동(확실)
 (function initTabFromHash(){
   const t = getHashTab();
   const allowed = ["today","study","add","search","backup"];
