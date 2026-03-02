@@ -733,5 +733,9 @@ $("importFile").addEventListener("change", async (e) => {
 
 // init
 rerenderAll();
-const initialTab = getHashTab();
-setTab(["today","study","add","search","backup"].includes(initialTab) ? initialTab : "today");
+
+(function initTabFromHash(){
+  const t = getHashTab();
+  const allowed = ["today","study","add","search","backup"];
+  setTab(allowed.includes(t) ? t : "today", { syncHash: false });
+})();
