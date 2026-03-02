@@ -37,6 +37,11 @@
         </div>
       </div>
 
+      <div class="card" id="todayGuideCard">
+        <div class="h">오늘 가이드</div>
+        <div class="p" id="todayGuideText">-</div>
+      </div>
+
       <div class="card">
         <div class="h">오늘 할 일</div>
 
@@ -176,6 +181,39 @@
         <input id="searchInput" class="input" placeholder="word/meaning/example 검색" />
         <div class="p dim small" id="searchMeta">-</div>
         <div id="searchList" class="list"></div>
+      </div>
+
+      <!-- Edit Sheet (Bottom Sheet) -->
+      <div class="sheetOverlay hidden" id="sheetOverlay"></div>
+      <div class="sheet hidden" id="editSheet" role="dialog" aria-modal="true">
+        <div class="sheetHeader">
+          <div class="sheetTitle">카드 수정</div>
+          <button class="ghost" id="btnSheetClose">닫기</button>
+        </div>
+
+        <div class="sheetBody">
+          <div class="field">
+            <div class="label">word</div>
+            <input id="editWord" class="input" placeholder="word" />
+          </div>
+          <div class="field">
+            <div class="label">meaning</div>
+            <input id="editMeaning" class="input" placeholder="meaning" />
+          </div>
+          <div class="field">
+            <div class="label">example</div>
+            <textarea id="editExample" placeholder="example (optional)"></textarea>
+          </div>
+
+          <div class="p dim small" id="editMeta">-</div>
+        </div>
+
+        <div class="sheetActions">
+          <button class="danger" id="btnDeleteCard">삭제</button>
+          <div class="spacer"></div>
+          <button class="ghost" id="btnCancelEdit">취소</button>
+          <button class="primary" id="btnSaveEdit">저장</button>
+        </div>
       </div>
     </section>
 
